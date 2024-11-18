@@ -97,11 +97,9 @@ class machineCode_parser:
             self.registerFiles[rd] = self.registerFiles[rs1] & self.registerFiles[rs2]
         # shift left logical
         elif funct3 == '001' and funct7 == '0000000':
-            abs(self.registerFiles[rs1])
             self.registerFiles[rd] = self.registerFiles[rs1] << self.registerFiles[rs2]
         # shift right logical
         elif funct3 == '101' and funct7 == '0000000':
-            abs(self.registerFiles[rs1])
             self.registerFiles[rd] = self.registerFiles[rs1] >> self.registerFiles[rs2]
         # shift right Arith
         elif funct3 == '101' and funct7 == '0100000':
@@ -114,9 +112,9 @@ class machineCode_parser:
                 self.registerFiles[rd] = 0
         # set less than (U)
         elif funct3 == '011' and funct7 == '0000000':
-            abs(self.registerFiles[rs1])
-            abs(self.registerFiles[rs2])
-            if self.registerFiles[rs1] < self.registerFiles[rs2]:
+            rs1_value = abs(self.registerFiles[rs1])
+            rs2_value = abs(self.registerFiles[rs2])
+            if rs1_value < rs2_value:
                 self.registerFiles[rd] = 1
             else:
                 self.registerFiles[rd] = 0
@@ -144,19 +142,16 @@ class machineCode_parser:
             elif funct3 == '001':
                 converted = '0000000' + imm_12bits[7:]
                 converted_int = self.bin2dec(converted)
-                abs(self.registerFiles[rs1])
                 self.registerFiles[rd] = self.registerFiles[rs1] << converted_int
             # shift right logical Imm
             elif funct3 == '101':
                 converted = '0000000' + imm_12bits[7:]
                 converted_int = self.bin2dec(converted)
-                abs(self.registerFiles[rs1])
                 self.registerFiles[rd] = self.registerFiles[rs1] >> converted_int
             # shift right arith Imm
             elif funct3 == '101':
                 converted = '0100000' + imm_12bits[7:]
                 converted_int = self.bin2dec(converted)
-                abs(self.registerFiles[rs1])
                 self.registerFiles[rd] = self.registerFiles[rs1] >> converted_int
             # set less than Imm
             elif funct3 == '010':
@@ -166,9 +161,9 @@ class machineCode_parser:
                     self.registerFiles[rd] = 0
             # set less than Imm(U)
             elif funct3 == '011':
-                abs(self.registerFiles[rs1])
-                abs(imm)
-                if self.registerFiles[rs1]  < imm:
+                rs1_value = abs(self.registerFiles[rs1])
+                imm = abs(imm)
+                if rs1_value  < imm:
                     self.registerFiles[rd] = 1
                 else:
                     self.registerFiles[rd] = 0
@@ -247,16 +242,16 @@ class machineCode_parser:
                 self.registerFiles['pc'] = self.current_location +  offset
         # branch < (U)
         elif funct3 == '110':
-            abs(self.registerFiles[rs1])
-            abs(self.registerFiles[rs2])
-            if self.registerFiles[rs1] < self.registerFiles[rs2]:
+            rs1_value = abs(self.registerFiles[rs1])
+            rs2_value = abs(self.registerFiles[rs2])
+            if rs1_value < rs2_value:
                 # tính giá trị của thanh ghi pc dựa vào offset
                 self.registerFiles['pc'] = self.current_location +  offset
         # branch >= (U)
         elif funct3 == '110':
-            abs(self.registerFiles[rs1])
-            abs(self.registerFiles[rs2])
-            if self.registerFiles[rs1] >= self.registerFiles[rs2]:
+            rs1_value = abs(self.registerFiles[rs1])
+            rs2_value = abs(self.registerFiles[rs2])
+            if rs1_value >= rs2_value:
                 # tính giá trị của thanh ghi pc dựa vào offset
                 self.registerFiles['pc'] = self.current_location +  offset
         # đảm bảo giá trị thanh ghi zero bằng 0
