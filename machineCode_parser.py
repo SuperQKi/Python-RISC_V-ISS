@@ -22,7 +22,6 @@ class machineCode_parser:
             if pos < len(instructions):
                 # decode
                 opcode = instructions[pos][25:]
-
                 # lenh thuoc R-type
                 if opcode == '0110011':
                     rd = self.register_table[int(instructions[pos][20:25], 2)]
@@ -34,13 +33,14 @@ class machineCode_parser:
                     self.ExecuteR(funct7, rs2, rs1, funct3, rd)
 
                 # lenh thuoc I-type
-                elif opcode == '0010011' or opcode == '0000011':
+                elif opcode == '0010011' or opcode == '0000011' or opcode == '1100111':
                     rd = self.register_table[int(instructions[pos][20:25], 2)]
                     funct3 = instructions[pos][17:20]
                     rs1 = self.register_table[int(instructions[pos][12:17], 2)]
                     imm_12bits = instructions[pos][0:12]
                     #execute
                     self.ExecuteI(opcode, funct3, rd, rs1, imm_12bits)
+
 
                 # lenh thuoc U-type
                 elif opcode == '0110111' or opcode == '0010111':
@@ -53,8 +53,8 @@ class machineCode_parser:
                 elif opcode == '0100011':
                     imm_4_0 = instructions[pos][20:25]
                     funct3 = instructions[pos][17:20]
-                    rs1 = self.register_table[int(instructions[pos][12:17], 2)]
-                    rs2 = self.register_table[int(instructions[pos][7:12], 2)]
+                    rs1 = self.register_table[int(instructions[pos][7:12], 2)]
+                    rs2 = self.register_table[int(instructions[pos][12:17], 2)]
                     imm_11_5 = instructions[pos][0:7]
                     #excute
                     self.ExecuteS(funct3, rs1, rs2, imm_4_0, imm_11_5)
@@ -68,11 +68,20 @@ class machineCode_parser:
                     imm_12_10_5 = instructions[pos][0:7]
                     #excute
                     self.ExecuteB(funct3, rs1, rs2, imm_4_1_11, imm_12_10_5)
+
+                # lệnh thuộc J-type
+                elif opcode == '1101111':
+                    imm_20_10_1_11_19_12 = instructions[pos][0:20]
+                    rd = self.register_table[(int(instructions[pos][20:25], 2))]
+                    #execute
+                    self.ExecuteJ(rd, imm_20_10_1_11_19_12)
+
+            # thoát vòng lặp
             else:
                 break
             # lay dia chi cau lenh tiep theo
             self.current_location = self.registerFiles['pc']
-            pos = (self.current_location - 4194304) // 4
+            pos = (self.current_location - 4194304) // self.word_size
         # lưu giá trị trong thanh ghi vào data memory
         self.save_values2dataMemory()
         # in kết quả ra file
@@ -167,41 +176,48 @@ class machineCode_parser:
                     self.registerFiles[rd] = 1
                 else:
                     self.registerFiles[rd] = 0
+        # lenh jalr
+        elif opcode == '1100111':
+            offset = self.bin2dec(imm_12bits)
+            self.registerFiles[rd] = self.registerFiles['pc'] + self.word_size
+            self.registerFiles['pc'] += self.registerFiles[rs1] + offset
         # Các câu lệnh load
         elif opcode == '0000011':
-            # chuyển số tức thời sang hệ thập lục bát
-            offset = hex(int(imm_12bits, 2))
-            if offset in self.dataMemory.keys():
+            # tính giá trị address = value in[rs1] + offset(imm)
+            address = hex(self.bin2dec(imm_12bits) + self.registerFiles[rs1])
+            if address in self.dataMemory.keys():
                 # Load Byte
                 if funct3 == '000':
-                    self.dataMemory[rd] = self.bin2dec(self.dec2bin(self.registerFiles[offset])[24:])
+                    self.registerFiles[rd] = self.bin2dec(self.dec2bin(self.dataMemory[address])[24:])
                 # load half
                 elif funct3 == '001':
-                    self.dataMemory[rd] = self.bin2dec(self.dec2bin(self.registerFiles[offset])[16:])
+                    self.registerFiles[rd] = self.bin2dec(self.dec2bin(self.dataMemory[address])[16:])
                 # load word
                 elif funct3 == '010':
-                    self.dataMemory[rd] = self.registerFiles[offset]
+                    self.registerFiles[rd] = self.dataMemory[address]
                 # load byte (U)
                 elif funct3 == '100':
-                    self.dataMemory[rd] = int(self.dec2bin(self.registerFiles[offset])[24:], 2)
+                    self.registerFiles[rd] = self.bin2dec(self.dec2bin(self.dataMemory[address])[24:], 2)
                 # load half (U)
                 elif funct3 == '101':
-                    self.dataMemory[rd] = int(self.dec2bin(self.registerFiles[offset])[16:], 2)
+                    self.registerFiles[rd] = self.bin2dec(self.dec2bin(self.dataMemory[address])[16:], 2)
+
         # đảm bảo giá trị thanh ghi zero bằng 0
         self.Fix_registerZero()
 
     # thuc thi lenh S-type
     def ExecuteS(self, funct3, rs1, rs2, imm_4_0, imm_11_5):
-        offset = hex(int(imm_11_5 + imm_4_0 , 2))
+        # tính address = value in rs2 + offset(imm)
+        address = hex(self.bin2dec(imm_11_5 + imm_4_0) + self.registerFiles[rs2])
         # store byte
         if funct3 == '000':
-            self.dataMemory[offset] = self.bin2dec(self.dec2bin(self.registerFiles[rs1])[24:])
+            self.dataMemory[address] = self.bin2dec(self.dec2bin(self.registerFiles[rs1])[24:])
         #store half
         elif funct3 == '001':
-            self.dataMemory[offset] = self.bin2dec(self.dec2bin(self.registerFiles[rs1])[16:])
+            self.dataMemory[address] = self.bin2dec(self.dec2bin(self.registerFiles[rs1])[16:])
         #store word
         elif funct3 == '010':
-            self.dataMemory[offset] = self.registerFiles[rs1]
+            self.dataMemory[address] = self.registerFiles[rs1]
         # đảm bảo giá trị thanh ghi zero bằng 0
         self.Fix_registerZero()
 
@@ -219,7 +235,6 @@ class machineCode_parser:
     def ExecuteB(self, funct3, rs1, rs2, imm_4_1_11, imm_12_10_5):
         converted = imm_12_10_5[0] + imm_4_1_11[-1] + imm_12_10_5[1:] + imm_4_1_11[:-1]
         offset = self.bin2dec(converted) << 1
-        print(offset)
         # branch ==
         if funct3 == '000':
             if self.registerFiles[rs1] == self.registerFiles[rs2]:
@@ -255,6 +270,19 @@ class machineCode_parser:
                 # tính giá trị của thanh ghi pc dựa vào offset
                 self.registerFiles['pc'] = self.current_location +  offset
         # đảm bảo giá trị thanh ghi zero bằng 0
+        self.Fix_registerZero()
+
+    # thực thi lệnh j type
+    def ExecuteJ(self, rd, imm_20_10_1_11_19_12):
+        imm_20 = imm_20_10_1_11_19_12[0]
+        imm_10_1 = imm_20_10_1_11_19_12[1:11]
+        imm_11 = imm_20_10_1_11_19_12[11]
+        imm_19_12 = imm_20_10_1_11_19_12[12:]
+        converted = imm_20 + imm_19_12 + imm_11 + imm_10_1
+        offset = self.bin2dec(converted) << 1
+        self.registerFiles[rd] = self.registerFiles['pc'] + self.word_size
+        self.registerFiles['pc'] = self.current_location + offset
+        # đảm bảo giá trị x0 =0
         self.Fix_registerZero()
 
     def dec2bin(self, number):
@@ -296,3 +324,4 @@ class machineCode_parser:
             self.dataMemory[pos] = v
             pos = hex(int(pos, 16) + 4)
 
+            
