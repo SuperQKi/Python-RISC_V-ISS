@@ -12,6 +12,8 @@ try:
         instructions.append(line)
     parse_instructions = machineCode_parser(registerfiles,register_table)
     parse_instructions.parse(instructions)
+
+    print('Program finished!')
     sys.exit(0)
 
 except Exception as e:
