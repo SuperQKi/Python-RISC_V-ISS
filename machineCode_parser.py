@@ -53,8 +53,8 @@ class machineCode_parser:
                 elif opcode == '0100011':
                     imm_4_0 = instructions[pos][20:25]
                     funct3 = instructions[pos][17:20]
-                    rs1 = self.register_table[int(instructions[pos][7:12], 2)]
-                    rs2 = self.register_table[int(instructions[pos][12:17], 2)]
+                    rs1 = self.register_table[int(instructions[pos][12:17], 2)]
+                    rs2 = self.register_table[int(instructions[pos][7:12], 2)]
                     imm_11_5 = instructions[pos][0:7]
                     #excute
                     self.ExecuteS(funct3, rs1, rs2, imm_4_0, imm_11_5)
@@ -201,6 +201,8 @@ class machineCode_parser:
                 # load half (U)
                 elif funct3 == '101':
                     self.registerFiles[rd] = self.bin2dec(self.dec2bin(self.dataMemory[address])[16:], 2)
+            else:
+                self.registerFiles[rd] = 0
 
         # đảm bảo giá trị thanh ghi zero bằng 0
         self.Fix_registerZero()
@@ -208,16 +210,16 @@ class machineCode_parser:
     # thuc thi lenh S-type
     def ExecuteS(self, funct3, rs1, rs2, imm_4_0, imm_11_5):
         # tính address = value in rs2 + offset(imm)
-        address = hex(self.bin2dec(imm_11_5 + imm_4_0) + self.registerFiles[rs2])
+        address = hex(self.bin2dec(imm_11_5 + imm_4_0) + self.registerFiles[rs1])
         # store byte
         if funct3 == '000':
-            self.dataMemory[address] = self.bin2dec(self.dec2bin(self.registerFiles[rs1])[24:])
+            self.dataMemory[address] = self.bin2dec(self.dec2bin(self.registerFiles[rs2])[24:])
         #store half
         elif funct3 == '001':
-            self.dataMemory[address] = self.bin2dec(self.dec2bin(self.registerFiles[rs1])[16:])
+            self.dataMemory[address] = self.bin2dec(self.dec2bin(self.registerFiles[rs2])[16:])
         #store word
         elif funct3 == '010':
-            self.dataMemory[address] = self.registerFiles[rs1]
+            self.dataMemory[address] = self.registerFiles[rs2]
         # đảm bảo giá trị thanh ghi zero bằng 0
         self.Fix_registerZero()
 
