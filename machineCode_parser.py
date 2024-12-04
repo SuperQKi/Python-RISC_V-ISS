@@ -1,4 +1,11 @@
-
+###################################################################
+# value of register is dec                                        #
+# key of dataMem is hex                                           #
+# value of dataMem is dec                                         #
+###################################################################
+import msvcrt
+import sys
+import os
 
 class machineCode_parser:
     word_size = 0
@@ -6,10 +13,21 @@ class machineCode_parser:
     registerFiles = {}
     register_table = {}
     current_location = 0
-
+    # vị trí của hiện tại của break pointer
+    current_brk = 0
+    # vị trí bắt đầu của heap
+    start_brk = 0
+    # vị trí cuối cùng của heap
+    end_brk = 0
+    # dung de thuc thi voi file
+    file = 0
     def __init__(self, registerFiles, register_table) :
+        self.file = 0
+        self.start_brk = 268697600
+        self.end_brk = 268698108
         self.word_size = 4
         self.current_location = 4194304
+        self.current_brk = self.start_brk
         self.registerFiles = registerFiles
         self.register_table = register_table
 
@@ -76,6 +94,10 @@ class machineCode_parser:
                     #execute
                     self.ExecuteJ(rd, imm_20_10_1_11_19_12)
 
+                # Các lệnh syscalls
+                elif opcode == '1110011':
+                    #execute 
+                    self.ExecuteSyscalls()
             # thoát vòng lặp
             else:
                 break
@@ -83,10 +105,9 @@ class machineCode_parser:
             self.current_location = self.registerFiles['pc']
             pos = (self.current_location - 4194304) // self.word_size
         # lưu giá trị trong thanh ghi vào data memory
-        self.save_values2dataMemory()
+        self.save_valuesR2dataMemory()
         # in kết quả ra file
         self.print_results()
-
     # thực thi lệnh R-type
     def ExecuteR (self, funct7, rs2, rs1, funct3, rd):
         # add
@@ -273,7 +294,7 @@ class machineCode_parser:
                 self.registerFiles['pc'] = self.current_location +  offset
         # đảm bảo giá trị thanh ghi zero bằng 0
         self.Fix_registerZero()
-
+   
     # thực thi lệnh j type
     def ExecuteJ(self, rd, imm_20_10_1_11_19_12):
         imm_20 = imm_20_10_1_11_19_12[0]
@@ -286,6 +307,193 @@ class machineCode_parser:
         self.registerFiles['pc'] = self.current_location + offset
         # đảm bảo giá trị x0 =0
         self.Fix_registerZero()
+
+    # execute syscall instrutions
+    def ExecuteSyscalls(self) :
+        # PrintInt
+        if self.registerFiles['a7'] == 1:
+            print(self.registerFiles['a0'])
+
+        # PrintString
+        elif self.registerFiles['a7'] == 4:
+            output_user = ''
+            # khởi tạo ký tự tương ứng với mỗi byte trong dataMem
+            char = ''
+            # địa chỉ để lấy chuỗi ra khỏi dataMem 
+            address = hex(self.registerFiles['a0'])
+            flag = True
+            while flag:
+                if address not in self.dataMemory.keys():
+                    # Thoát nếu địa chỉ lấy chuỗi ko tồn tại
+                    flag = False
+                else:
+                    # lấy dữ liệu trong word
+                    data = hex(self.dataMemory[address])[2:].zfill(8)
+                    for pos in range(7, -1, -2):
+                        char = chr(int(data[pos-1] + data[pos], 16))
+                        if char == '\0':
+                            # dừng lấy ký tự nếu nó là NULL 
+                            flag = False
+                        else:
+                            output_user += char
+                    address = hex(int(address, 16) + 4) 
+            #In chuỗi
+            print(output_user)
+
+        # ReadInt
+        elif self.registerFiles['a7'] == 5:
+            self.registerFiles['a0'] = int(input())
+
+        # readString
+        elif self.registerFiles['a7'] == 8:
+            # lấy độ dài tối đa của chuỗi nhập vào trong a1
+            max_length = self.registerFiles['a1'] - 1
+            # nhập chuỗi 
+            user_input = input()[:max_length] + '\0'
+            # lấy địa chỉ chuỗi lưu vào trong dataMem 
+            address = hex(self.registerFiles['a0'])
+            # lưu chuỗi vào dataMem
+            for char in user_input:
+                if address not in self.dataMemory.keys():
+                    # khởi tạo địa chỉ nếu địa chỉ chưa có
+                    self.dataMemory[address] = ''
+                # đẩy từng kí tự vào dataMem
+                self.dataMemory[address] = hex(ord(char))[2:].zfill(2) + self.dataMemory[address]
+                if len(self.dataMemory[address]) == 8:
+                    self.dataMemory[address] = int(self.dataMemory[address], 16)
+                    # chuyển vùng nhớ nếu word hiện tại đã đầy
+                    address = hex(int(address, 16) + 4)
+
+            if address in self.dataMemory.keys():
+                self.dataMemory[address] = int(self.dataMemory[address], 16)  
+            
+        # Sbrk (break pointer)
+        elif self.registerFiles['a7'] == 9:
+            inscrement = self.registerFiles['a0']
+            result = self.handle_sbrk(inscrement)
+            self.registerFiles['a0'] = result
+
+        # Exit
+        elif self.registerFiles['a7'] == 10:
+            sys.exit()
+
+        # PrintChar
+        elif self.registerFiles['a7'] == 11:
+            # chuyển byte thấp nhất sang số nguyên
+            latestB2int = self.registerFiles['a0'] & 255
+            print(chr(latestB2int)) 
+
+        # ReadChar
+        elif self.registerFiles['a7'] == 12:
+            # đọc một kí tự từ bàn phím
+            char = msvcrt.getch().decode('utf-8')
+            # lưu ký tự vừa đọc vào a0 dưới dạng số nguyên
+            self.registerFiles['a0'] = ord(char)
+
+        # Exit2
+        elif self.registerFiles['a7'] == 93:
+            number2exit = self.registerFiles['a0']
+            sys.exit(number2exit)
+
+        # OpenFile
+        elif self.registerFiles['a7'] == 1024:
+            file_name = ''
+            # khởi tạo ký tự tương ứng với mỗi byte trong dataMem
+            char = ''
+            # địa chỉ để lấy chuỗi ra khỏi dataMem 
+            address = hex(self.registerFiles['a0'])
+            flag = True
+            while flag:
+                if address not in self.dataMemory.keys():
+                    # Thoát nếu địa chỉ lấy chuỗi ko tồn tại
+                    flag = False
+                else:
+                    # lấy dữ liệu trong word
+                    data = hex(self.dataMemory[address])[2:].zfill(8)
+                    for pos in range(7, -1, -2):
+                        char = chr(int(data[pos-1] + data[pos], 16))
+                        if char == '\0':
+                            # dừng lấy ký tự nếu nó là NULL 
+                            flag = False
+                        else:
+                            file_name += char
+                    address = hex(int(address, 16) + 4) 
+
+            if self.registerFile['a1'] == 0:
+                self.registerFiles['a0'] = os.open(file_name, os.O_RDONLY)
+            elif self.registerFile['a1'] == 1:
+                self.registerFiles['a0'] = os.open(file_name, os.O_WRONLY | os.O_CREAT)
+            elif self.registerFile['a1'] == 9:
+                self.registerFiles['a0'] = os.open(file_name, os.O_APPEND)
+        
+        # Read from file
+        elif self.registerFiles['a7'] == 63:
+            # Đặt con trỏ về đầu tệp
+            os.lseek(self.registerFiles['a0'], os.SEEK_SET)
+            data_read = os.read(self.registerFiles['a0'], self.registerFiles['a2'])
+
+            # lấy địa chỉ chuỗi lưu vào trong dataMem 
+            address = hex(self.registerFiles['a1'])
+            # lưu chuỗi vào dataMem
+            for char in data_read:
+                if address not in self.dataMemory.keys():
+                    # khởi tạo địa chỉ nếu địa chỉ chưa có
+                    self.dataMemory[address] = ''
+                # đẩy từng kí tự vào dataMem
+                self.dataMemory[address] = hex(ord(char))[2:].zfill(2) + self.dataMemory[address]
+                if len(self.dataMemory[address]) == 8:
+                    self.dataMemory[address] = int(self.dataMemory[address], 16)
+                    # chuyển vùng nhớ nếu word hiện tại đã đầy
+                    address = hex(int(address, 16) + 4)
+
+            if address in self.dataMemory.keys():
+                self.dataMemory[address] = int(self.dataMemory[address], 16)  
+            
+        # Write to file 
+        elif self.registerFiles['a7'] == 64:
+            data_to_write = ''
+            # khởi tạo ký tự tương ứng với mỗi byte trong dataMem
+            char = ''
+            # địa chỉ để lấy chuỗi ra khỏi dataMem 
+            address = hex(self.registerFiles['a1'])
+            flag = True
+            while flag:
+                if address not in self.dataMemory.keys():
+                    # Thoát nếu địa chỉ lấy chuỗi ko tồn tại
+                    flag = False
+                else:
+                    # lấy dữ liệu trong word
+                    data = hex(self.dataMemory[address])[2:].zfill(8)
+                    for pos in range(7, -1, -2):
+                        char = chr(int(data[pos-1] + data[pos], 16))
+                        if len(data_to_write) == self.registerFiles['a2']:
+                            # dừng lấy ký tự neu chuoi bang do dai toi da co the lay
+                            flag = False
+                        else:
+                            data_to_write += char
+                    address = hex(int(address, 16) + 4) 
+            os.write(self.registerFiles['a0'], data_to_write.encode("utf-8"))
+            self.registerFiles['a0'] = self.registerFiles['a2']
+        
+        # CloseFile
+        elif self.registerFiles['a7'] == 57:
+            os.close(self.registerFiles['a0'])
+        
+        # đảm bảo giá trị x0 =0
+        self.Fix_registerZero()
+
+    def handle_sbrk(self, increment):
+        old_brk = self.current_brk
+        new_brk = old_brk + increment
+        # kiểm tra phạm vi truy cập vùng nhớ
+        if new_brk > self.old_brk or new_brk < self.start_brk:
+            print('Address does not axist!')
+            sys.exit(0)
+        # cập nhật địa chỉ break pointer
+        self.current_brk = new_brk
+
+        return old_brk
+
 
     def dec2bin(self, number):
         # chuyển số dec sang số bin ở dạng có dấu
@@ -308,7 +516,7 @@ class machineCode_parser:
 
     def print_results(self):
         # in kết quả ra file
-        file_out = open('Results.txt', 'w')
+        file_out = open('D:\python\RiscV_ISS\Results.txt', 'w')
         # in dữ liệu thanh ghi
         for k,v in self.registerFiles.items():
             file_out.write(str(k) + ': ' + str(v) + '\n')
@@ -318,12 +526,10 @@ class machineCode_parser:
             file_out.write(str(k) + ': ' + str(v) + '\n')
         file_out.close()
 
-    def save_values2dataMemory(self):
+    def save_valuesR2dataMemory(self):
         # khoi tao vi tri data memory
         pos = '0x90'
         # lưu các giá trị trong thanh ghi vào dataMemory
         for k,v in self.registerFiles.items():
             self.dataMemory[pos] = v
-            pos = hex(int(pos, 16) + 4)
-
-            
+            pos = hex(int(pos, 16) + 4)     
